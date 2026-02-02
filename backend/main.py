@@ -37,24 +37,20 @@ def train(episodes: int = 10000):
 
 
 # -----------------------------
-# Simulate
+# Multi Taxi Simulation
 # -----------------------------
 @app.get("/simulate")
 def simulate():
 
-    env = SmartTaxiEnv()
+    NUM_TAXIS = 5
 
-    # Load trained Q-table
     q_table = np.load("q_table.npy")
 
-    state = env.reset()
+    taxis = []
 
-    done = False
-    total_reward = 0
-    steps = 0
 
-    path = []
-    logs = []
+    # Shared demand heatmap
+    demand = np.random.randint(0, 10, (5, 5))
 
 
     # Action names
@@ -67,123 +63,141 @@ def simulate():
         5: "Dropoff"
     }
 
-    pickup_loc = None
-    dropoff_loc = None
+
+    # ============================
+    # Run each taxi
+    # ============================
+    for tid in range(NUM_TAXIS):
+
+        env = SmartTaxiEnv()
+
+        state = env.reset()
+
+        done = False
+        steps = 0
+        total_reward = 0
+
+        path = []
+        logs = []
+
+        pickup_loc = None
+        dropoff_loc = None
 
 
-    # ----------------------------
-    # Demand Heatmap
-    # ----------------------------
-    demand = np.random.randint(0, 10, (5, 5))
+        # ----------------------------
+        # Simulation Loop
+        # ----------------------------
+        while not done and steps < 200:
+
+            row, col, passenger, dest = env.decode(state)
 
 
-    # ----------------------------
-    # Simulation Loop
-    # ----------------------------
-    while not done and steps < 200:
+            # Save pickup & dropoff
+            if pickup_loc is None and passenger < 4:
+                pickup_loc = env.locs[passenger]
 
-        row, col, passenger, dest = env.decode(state)
-
-
-        # Save pickup & dropoff once
-        if pickup_loc is None and passenger < 4:
-            pickup_loc = env.locs[passenger]
-
-        if dropoff_loc is None and dest < 4:
-            dropoff_loc = env.locs[dest]
+            if dropoff_loc is None and dest < 4:
+                dropoff_loc = env.locs[dest]
 
 
-        # Save path
-        path.append([row, col])
+            # Save path
+            path.append([row, col])
 
 
-        # Choose best action
-        action = int(np.argmax(q_table[state]))
+            # Choose best action
+            action = int(np.argmax(q_table[state]))
 
 
-        # Step
-        next_state, reward, done, _ = env.step(action)
+            # Step
+            next_state, reward, done, _ = env.step(action)
+
+            q_val = float(q_table[state][action])
 
 
-        q_val = float(q_table[state][action])
+            # Logs
+            logs.append({
+                "step": steps,
+                "position": [row, col],
+                "action": action_map[action],
+                "q_value": round(q_val, 2),
+                "reward": round(reward, 2),
+                "energy": round(env.energy, 2)
+            })
 
 
-        # Log for explainability
-        logs.append({
-            "step": steps,
-            "position": [row, col],
-            "passenger": passenger,
-            "destination": dest,
-            "action": action_map[action],
-            "q_value": round(q_val, 2),
-            "reward": round(reward, 2),
-            "energy": round(env.energy, 2)
+            total_reward += reward
+
+            state = next_state
+            steps += 1
+
+
+        # ----------------------------
+        # ETA
+        # ----------------------------
+
+        avg_speed = 30  # km/h
+        distance = len(path) * 0.5
+
+        eta_min = (distance / avg_speed) * 60
+
+
+        # ----------------------------
+        # Fare
+        # ----------------------------
+
+        base_fare = 50
+        per_km = 12
+
+        traffic_surge = np.mean(env.traffic) * 20
+        weather_surge = np.mean(env.weather) * 15
+
+        fare = (
+            base_fare +
+            (distance * per_km) +
+            traffic_surge +
+            weather_surge
+        )
+
+
+        # ----------------------------
+        # Save Taxi Result
+        # ----------------------------
+
+        taxis.append({
+
+            "id": tid + 1,
+
+            "total_reward": round(total_reward, 2),
+            "steps": steps,
+            "energy_left": round(env.energy, 2),
+
+            "path": path,
+            "logs": logs,
+
+            "pickup": pickup_loc,
+            "dropoff": dropoff_loc,
+
+            "eta": round(eta_min, 2),
+            "fare": round(fare, 2),
+
+            "traffic": env.traffic.tolist(),
+            "weather": env.weather.tolist()
+
         })
 
 
-        total_reward += reward
-
-        state = next_state
-        steps += 1
-
-
-    # ----------------------------
-    # ETA Calculation
-    # ----------------------------
-
-    avg_speed = 30  # km/h (assumed)
-
-    distance = len(path) * 0.5  # 0.5 km per cell
-
-    eta_hours = distance / avg_speed
-    eta_minutes = eta_hours * 60
-
-
-    # ----------------------------
-    # Fare Prediction
-    # ----------------------------
-
-    base_fare = 50
-    per_km = 12
-
-    traffic_surge = np.mean(env.traffic) * 20
-    weather_surge = np.mean(env.weather) * 15
-
-    fare = (
-        base_fare +
-        (distance * per_km) +
-        traffic_surge +
-        weather_surge
-    )
-
-
-    # ----------------------------
+    # ============================
     # Response
-    # ----------------------------
+    # ============================
 
     return {
 
-        # Main stats
-        "total_reward": round(total_reward, 2),
-        "steps": steps,
-        "energy_left": round(env.energy, 2),
+        "status": "success",
 
-        # Path + Logs
-        "path": path,
-        "logs": logs,
+        "taxis": taxis,
 
-        # Environment
-        "traffic": env.traffic.tolist(),
-        "weather": env.weather.tolist(),
-        "demand": demand.tolist(),
+        "demand": demand.tolist()
 
-        # Locations
-        "pickup": pickup_loc,
-        "dropoff": dropoff_loc,
-
-        # Intelligence
-        "eta": round(eta_minutes, 2),
-        "fare": round(fare, 2)
     }
 
 

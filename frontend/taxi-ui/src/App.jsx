@@ -16,7 +16,7 @@ const API = "http://127.0.0.1:8000";
 
 
 // Change this to your API key
-const GOOGLE_KEY = "AIzaSyCDEXPpzFqouMu1KW9TW2-YSC2_B_fLl8U";
+const GOOGLE_KEY = "";
 
 
 const center = {

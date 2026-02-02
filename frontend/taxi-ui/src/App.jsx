@@ -1,13 +1,34 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
+
+import {
+  GoogleMap,
+  Marker,
+  Polyline,
+  TrafficLayer,
+  useJsApiLoader
+} from "@react-google-maps/api";
+
 import "./App.css";
 
+
 const API = "http://127.0.0.1:8000";
-const GRID_SIZE = 5;
+
+
+// Change this to your API key
+const GOOGLE_KEY = "AIzaSyCDEXPpzFqouMu1KW9TW2-YSC2_B_fLl8U";
+
+
+const center = {
+  lat: 17.385,
+  lng: 78.4867 // Hyderabad (default)
+};
+
 
 function App() {
 
-  // States
+  /* ================= STATES ================= */
+
   const [training, setTraining] = useState(false);
   const [simulating, setSimulating] = useState(false);
 
@@ -19,25 +40,30 @@ function App() {
   const [playing, setPlaying] = useState(false);
 
 
-  // ---------------------------
-  // Train Model
-  // ---------------------------
+  /* ================= MAP LOADER ================= */
+
+  const { isLoaded } = useJsApiLoader({
+    googleMapsApiKey: GOOGLE_KEY,
+    libraries: ["visualization"]
+  });
+
+
+  /* ================= TRAIN ================= */
+
   const trainModel = async () => {
 
     setTraining(true);
 
     try {
 
-      await axios.post(
-        `${API}/train?episodes=${episodes}`
-      );
+      await axios.post(`${API}/train?episodes=${episodes}`);
 
-      alert("✅ Training Completed!");
+      alert("Training Completed");
 
     } catch (err) {
 
+      alert("Training Failed");
       console.error(err);
-      alert("❌ Training Failed");
 
     }
 
@@ -45,12 +71,12 @@ function App() {
   };
 
 
-  // ---------------------------
-  // Run Simulation
-  // ---------------------------
+  /* ================= SIMULATE ================= */
+
   const runSimulation = async () => {
 
     setSimulating(true);
+
     setCurrentStep(0);
     setPlaying(false);
 
@@ -58,14 +84,12 @@ function App() {
 
       const res = await axios.get(`${API}/simulate`);
 
-      console.log("Simulation Data:", res.data);
-
       setResult(res.data);
 
     } catch (err) {
 
+      alert("Simulation Failed");
       console.error(err);
-      alert("❌ Simulation Failed");
 
     }
 
@@ -73,9 +97,8 @@ function App() {
   };
 
 
-  // ---------------------------
-  // Play Animation
-  // ---------------------------
+  /* ================= PLAY ================= */
+
   const play = () => {
 
     if (!result?.path) return;
@@ -84,7 +107,7 @@ function App() {
 
     let i = 0;
 
-    const interval = setInterval(() => {
+    const timer = setInterval(() => {
 
       i++;
 
@@ -92,7 +115,7 @@ function App() {
 
       if (i >= result.path.length - 1) {
 
-        clearInterval(interval);
+        clearInterval(timer);
         setPlaying(false);
       }
 
@@ -100,99 +123,131 @@ function App() {
   };
 
 
-  // ---------------------------
-  // Render Grid
-  // ---------------------------
-const renderGrid = () => {
+  /* ================= CONVERT GRID → MAP ================= */
 
-  if (!result?.path) return null;
+  const convertToLatLng = (row, col) => {
 
-  const pos =
-    result.path[Math.min(currentStep, result.path.length - 1)];
+    const baseLat = 17.385;
+    const baseLng = 78.4867;
 
-  const [r, c] = pos;
-
-  const traffic = result.traffic || [];
-  const weather = result.weather || [];
-
-  const pickup = Array.isArray(result.pickup) ? result.pickup : null;
-  const dropoff = Array.isArray(result.dropoff) ? result.dropoff : null;
+    return {
+      lat: baseLat + row * 0.01,
+      lng: baseLng + col * 0.01
+    };
+  };
 
 
-  let grid = [];
+  /* ================= RENDER MAP ================= */
 
-  for (let i = 0; i < GRID_SIZE; i++) {
+  const renderMap = () => {
 
-    let row = [];
+    if (!isLoaded || !result) return null;
 
-    for (let j = 0; j < GRID_SIZE; j++) {
-
-      const isTaxi = i === r && j === c;
-
-      const isPickup =
-        pickup && i === pickup[0] && j === pickup[1];
-
-      const isDropoff =
-        dropoff && i === dropoff[0] && j === dropoff[1];
-
-      const hasTraffic =
-        traffic[i] && traffic[i][j] > 0;
-
-      const hasWeather =
-        weather[i] && weather[i][j] > 0;
-
-
-      let cellClass = "cell";
-
-      if (hasTraffic) cellClass += " traffic";
-      if (hasWeather) cellClass += " weather";
-      if (isPickup) cellClass += " pickup";
-      if (isDropoff) cellClass += " dropoff";
-      if (isTaxi) cellClass += " taxi";
-
-
-      let symbol = "";
-
-      if (isPickup) symbol = "🟢";
-      if (isDropoff) symbol = "🔵";
-      if (isTaxi) symbol = "🚕";
-
-
-      row.push(
-        <div
-          key={`${i}-${j}`}
-          className={cellClass}
-        >
-          {symbol}
-        </div>
-      );
-    }
-
-    grid.push(
-      <div key={i} className="row-grid">
-        {row}
-      </div>
+    const path = result.path.map(p =>
+      convertToLatLng(p[0], p[1])
     );
-  }
 
-  return grid;
-};
-
+    const taxiPos =
+      path[Math.min(currentStep, path.length - 1)];
 
 
+    const pickup = result.pickup
+      ? convertToLatLng(result.pickup[0], result.pickup[1])
+      : null;
+
+    const dropoff = result.dropoff
+      ? convertToLatLng(result.dropoff[0], result.dropoff[1])
+      : null;
+
+
+    return (
+
+      <GoogleMap
+        center={taxiPos}
+        zoom={13}
+        mapContainerStyle={{
+          width: "100%",
+          height: "100%"
+        }}
+        options={{
+          mapTypeId: "roadmap",
+          disableDefaultUI: true,
+          zoomControl: true
+        }}
+      >
+
+        {/* Traffic */}
+        <TrafficLayer />
+
+
+        {/* Route */}
+        <Polyline
+          path={path}
+          options={{
+            strokeColor: "#22c55e",
+            strokeOpacity: 0.9,
+            strokeWeight: 4
+          }}
+        />
+
+
+        {/* Taxi */}
+        <Marker
+          position={taxiPos}
+          icon={{
+            url: "https://maps.google.com/mapfiles/kml/shapes/cabs.png",
+            scaledSize: new window.google.maps.Size(40, 40)
+          }}
+        />
+
+
+        {/* Pickup */}
+        {pickup && (
+
+          <Marker
+            position={pickup}
+            label="P"
+          />
+
+        )}
+
+
+        {/* Dropoff */}
+        {dropoff && (
+
+          <Marker
+            position={dropoff}
+            label="D"
+          />
+
+        )}
+
+      </GoogleMap>
+    );
+  };
+
+
+  /* ================= UI ================= */
 
   return (
+
     <div className="container">
 
-      <h1>🚕 Smart Taxi AI Simulator</h1>
+
+      {/* HEADER */}
+      <div className="header">
+        🚕 Smart Taxi AI Dashboard
+      </div>
 
 
-      {/* ================= Training ================= */}
-      <div className="card">
+      {/* SIDEBAR */}
+      <div className="sidebar">
 
-        <h2>Training</h2>
 
-        <div className="row">
+        {/* Training */}
+        <div className="control-box">
+
+          <h3>🧠 Training</h3>
 
           <input
             type="number"
@@ -205,7 +260,32 @@ const renderGrid = () => {
             onClick={trainModel}
             disabled={training}
           >
-            {training ? "Training..." : "Train Model"}
+            {training ? "Training..." : "Train"}
+          </button>
+
+        </div>
+
+
+        {/* Simulation */}
+        <div className="control-box">
+
+          <h3>🎮 Simulation</h3>
+
+          <button
+            onClick={runSimulation}
+            disabled={simulating}
+          >
+            {simulating ? "Running..." : "Run"}
+          </button>
+
+
+          <button
+            onClick={play}
+            disabled={playing || !result}
+            className="play-btn"
+            style={{ marginTop: "10px" }}
+          >
+            ▶ Play
           </button>
 
         </div>
@@ -213,92 +293,65 @@ const renderGrid = () => {
       </div>
 
 
-      {/* ================= Simulation ================= */}
-      <div className="card">
-
-        <h2>Simulation</h2>
-
-        <button
-          onClick={runSimulation}
-          disabled={simulating}
-        >
-          {simulating ? "Running..." : "Run Simulation"}
-        </button>
+      {/* MAIN */}
+      <div className="main">
 
 
+        {/* Stats */}
         {result && (
 
-          <>
+          <div className="stats">
 
-            {/* Stats */}
-            <div className="stats">
-
-              <p>
-                Reward:
-                <b> {result?.total_reward ?? "N/A"}</b>
-              </p>
-
-              <p>
-                Steps:
-                <b> {result?.steps ?? "N/A"}</b>
-              </p>
-
-              <p>
-                Energy:
-                <b> {result?.energy_left ?? "N/A"}</b>
-              </p>
-
+            <div className="stat">
+              Reward<br />
+              <b>{result.total_reward}</b>
             </div>
 
-
-            {/* Play */}
-            <button
-              onClick={play}
-              disabled={playing}
-              className="play-btn"
-            >
-              {playing ? "Playing..." : "▶ Play"}
-            </button>
-
-
-            {/* Grid */}
-            <div className="grid">
-              {renderGrid()}
+            <div className="stat">
+              Steps<br />
+              <b>{result.steps}</b>
             </div>
 
+            <div className="stat">
+              Energy<br />
+              <b>{result.energy_left}</b>
+            </div>
 
-            {/* ================= Logs ================= */}
-            {result?.logs && (
-
-              <div className="log-box">
-
-                <h3>🧠 AI Decision Log</h3>
-
-                <div className="log-scroll">
-
-                  {result.logs.map((log, i) => (
-
-                    <div key={i} className="log-item">
-
-                      Step {log.step} |
-                      Pos ({log.position[0]},{log.position[1]}) |
-                      Action: {log.action} |
-                      Q: {log.q_value} |
-                      Energy: {log.energy}
-
-                    </div>
-
-                  ))}
-
-                </div>
-
-              </div>
-
-            )}
-
-          </>
+          </div>
 
         )}
+
+
+        {/* MAP */}
+        <div className="map-container">
+          {renderMap()}
+        </div>
+
+      </div>
+
+
+      {/* LOGS */}
+      <div className="logs">
+
+        <h3>🧠 AI Logs</h3>
+
+        <div className="log-scroll">
+
+          {result?.logs?.map((log, i) => (
+
+            <div key={i} className="log-item">
+
+              Step {log.step} |
+              Pos ({log.position[0]},{log.position[1]}) |
+              {log.action} |
+              Q {log.q_value} |
+              E {log.energy}
+
+            </div>
+
+          ))}
+
+        </div>
 
       </div>
 

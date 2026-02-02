@@ -205,3 +205,43 @@ def simulate():
 @app.get("/")
 def root():
     return {"status": "Smart Taxi Backend Running"}
+
+# =============================
+# ADMIN DASHBOARD API
+# =============================
+
+@app.get("/admin/summary")
+def admin_summary():
+
+    # Example system stats (later we make real DB)
+    data = {
+
+        "total_rides": np.random.randint(200, 500),
+        "active_taxis": 5,
+        "avg_reward": round(np.random.uniform(15, 30), 2),
+        "avg_eta": round(np.random.uniform(5, 12), 2),
+        "revenue_today": round(np.random.uniform(5000, 15000), 2),
+
+        "server_status": "Running",
+        "model_status": "Trained"
+    }
+
+    return data
+
+
+@app.get("/admin/taxis")
+def admin_taxis():
+
+    taxis = []
+
+    for i in range(5):
+
+        taxis.append({
+            "id": i + 1,
+            "lat": 17.38 + np.random.rand() * 0.05,
+            "lng": 78.48 + np.random.rand() * 0.05,
+            "energy": round(np.random.uniform(40, 100), 1),
+            "status": np.random.choice(["Idle", "Busy", "Charging"])
+        })
+
+    return taxis

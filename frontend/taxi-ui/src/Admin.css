@@ -1,0 +1,122 @@
+.admin-container {
+
+  height: 100vh;
+
+  background: radial-gradient(circle at top, #020617, #020024);
+
+  color: white;
+
+  padding: 25px;
+
+}
+
+
+.admin-container h1 {
+
+  text-align: center;
+
+  color: #38bdf8;
+
+  margin-bottom: 25px;
+}
+
+
+/* STATS */
+
+.admin-stats {
+
+  display: grid;
+
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+
+  gap: 15px;
+
+  margin-bottom: 25px;
+}
+
+
+.admin-card {
+
+  background: rgba(30, 41, 59, 0.8);
+
+  border-radius: 14px;
+
+  padding: 15px;
+
+  text-align: center;
+
+  border: 1px solid #1e293b;
+
+  box-shadow: 0 0 20px rgba(0,0,0,0.6);
+
+}
+
+
+.admin-card b {
+
+  font-size: 1.3rem;
+
+  color: #22c55e;
+}
+
+
+/* TABLE */
+
+.admin-table {
+
+  background: rgba(2, 6, 23, 0.9);
+
+  padding: 18px;
+
+  border-radius: 14px;
+
+  border: 1px solid #1e293b;
+
+}
+
+
+.admin-table h3 {
+
+  margin-bottom: 12px;
+
+  color: #facc15;
+}
+
+
+table {
+
+  width: 100%;
+
+  border-collapse: collapse;
+
+  font-size: 14px;
+}
+
+
+th, td {
+
+  padding: 8px;
+
+  border-bottom: 1px solid #1e293b;
+
+  text-align: center;
+}
+
+
+tr:hover {
+
+  background: rgba(56,189,248,0.1);
+}
+
+
+.busy {
+  color: #f97316;
+}
+
+.idle {
+  color: #22c55e;
+}
+
+.charging {
+  color: #38bdf8;
+}
